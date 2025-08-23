@@ -6,6 +6,8 @@ import { Filter, Search, MapPin, Globe, Mountain, Building, Star } from 'lucide-
 import Map from '@/components/Map';
 import PlaceCard from '@/components/PlaceCard';
 import SearchBar from '@/components/SearchBar';
+import LoadingSpinner from '@/components/LoadingSpinner';
+import { APIError } from '@/lib/api';
 import { Place } from '@/types/place';
 import { wikipediaAPI } from '@/lib/wiki';
 import { geocodingAPI } from '@/lib/geocoding';
@@ -21,6 +23,7 @@ export default function ExplorePage() {
   });
   const [mapCenter, setMapCenter] = useState<[number, number]>([20, 0]);
   const [searchQuery, setSearchQuery] = useState('');
+  const [error, setError] = useState<string | null>(null);
   
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -57,6 +60,7 @@ export default function ExplorePage() {
 
   const loadFeaturedPlaces = async () => {
     setLoading(true);
+    setError(null);
     try {
       // Load a curated list of popular destinations
       const featuredQueries = [
@@ -81,6 +85,11 @@ export default function ExplorePage() {
       setPlaces(validPlaces);
     } catch (error) {
       console.error('Error loading featured places:', error);
+      if (error instanceof APIError) {
+        setError(error.message);
+      } else {
+        setError('Failed to load destinations');
+      }
     } finally {
       setLoading(false);
     }
@@ -89,6 +98,7 @@ export default function ExplorePage() {
   const handleSearch = async (query: string) => {
     setLoading(true);
     setSearchQuery(query);
+    setError(null);
     
     try {
       const searchResults = await wikipediaAPI.searchPlaces(query, 20);
@@ -111,6 +121,11 @@ export default function ExplorePage() {
       }
     } catch (error) {
       console.error('Search error:', error);
+      if (error instanceof APIError) {
+        setError(error.message);
+      } else {
+        setError('Search failed. Please try again.');
+      }
     } finally {
       setLoading(false);
     }
@@ -155,6 +170,33 @@ export default function ExplorePage() {
       description: place.extract.substring(0, 100) + '...',
       onClick: () => handlePlaceClick(place)
     }));
+
+  const handlePlaceClick = async (place: Place) => {
+    try {
+      const slug = place.title.toLowerCase().replace(/\s+/g, '-');
+      if (place.type === 'city') {
+        router.push(`/city/${slug}`);
+      } else if (place.type === 'monument') {
+        router.push(`/monument/${slug}`);
+      } else {
+        router.push(`/place/${slug}`);
+      }
+    } catch (error) {
+      console.error('Navigation error:', error);
+    }
+  };
+
+  const handleAddToItinerary = async (place: Place) => {
+    try {
+      // Here you would integrate with your itinerary API
+      console.log('Adding to itinerary:', place.title);
+      // For now, just show a success message
+      alert(`Added ${place.title} to your itinerary!`);
+    } catch (error) {
+      console.error('Error adding to itinerary:', error);
+      alert('Failed to add to itinerary. Please try again.');
+    }
+  };
 
   const handlePlaceClick = (place: Place) => {
     const slug = place.title.toLowerCase().replace(/\s+/g, '-');
@@ -289,18 +331,30 @@ export default function ExplorePage() {
               {loading ? (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                   {[...Array(6)].map((_, i) => (
-                    <div key={i} className="bg-white rounded-xl shadow-sm animate-pulse">
-                      <div className="h-48 bg-gray-200 rounded-t-xl"></div>
-                      <div className="p-6 space-y-3">
-                        <div className="h-6 bg-gray-200 rounded w-3/4"></div>
-                        <div className="h-4 bg-gray-200 rounded w-1/2"></div>
-                        <div className="space-y-2">
-                          <div className="h-3 bg-gray-200 rounded"></div>
-                          <div className="h-3 bg-gray-200 rounded w-5/6"></div>
-                        </div>
-                      </div>
+                    <div key={i} className="bg-white rounded-xl shadow-sm p-6">
+                      <LoadingSpinner />
                     </div>
                   ))}
+                </div>
+              ) : error ? (
+                <div className="text-center py-16">
+                  <div className="text-red-500 mb-4">
+                    <p className="text-lg font-semibold">Error Loading Destinations</p>
+                    <p className="text-sm">{error}</p>
+                  </div>
+                  <button
+                    onClick={() => {
+                      setError(null);
+                      if (searchQuery) {
+                        handleSearch(searchQuery);
+                      } else {
+                        loadFeaturedPlaces();
+                      }
+                    }}
+                    className="bg-blue-600 text-white px-6 py-3 rounded-lg font-medium hover:bg-blue-700 transition-colors"
+                  >
+                    Try Again
+                  </button>
                 </div>
               ) : filteredPlaces.length > 0 ? (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -310,9 +364,7 @@ export default function ExplorePage() {
                       place={place}
                       onClick={() => handlePlaceClick(place)}
                       showAddToItinerary={true}
-                      onAddToItinerary={() => {
-                        console.log('Add to itinerary:', place.title);
-                      }}
+                      onAddToItinerary={() => handleAddToItinerary(place)}
                     />
                   ))}
                 </div>

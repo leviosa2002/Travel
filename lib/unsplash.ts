@@ -1,3 +1,5 @@
+import { APIError, fetchWithRetry, config } from './api';
+
 interface UnsplashPhoto {
   id: string;
   urls: {
@@ -19,8 +21,8 @@ interface UnsplashPhoto {
 }
 
 export class UnsplashAPI {
-  private baseUrl = 'https://api.unsplash.com';
-  private accessKey = process.env.UNSPLASH_ACCESS_KEY;
+  private baseUrl = config.apis.unsplash;
+  private accessKey = config.keys.unsplash;
 
   // Fallback to curated public domain images when no API key
   private fallbackImages = [
@@ -45,16 +47,25 @@ export class UnsplashAPI {
         orientation: 'landscape'
       });
 
-      const response = await fetch(`${this.baseUrl}/search/photos?${params}`, {
+      const response = await fetchWithRetry(`${this.baseUrl}/search/photos?${params}`, {
         headers: {
           'Authorization': `Client-ID ${this.accessKey}`
         }
       });
 
       const data = await response.json();
+      
+      if (data.errors) {
+        throw new APIError(`Unsplash API error: ${data.errors.join(', ')}`);
+      }
+      
       return data.results?.map((photo: UnsplashPhoto) => photo.urls.regular) || this.fallbackImages.slice(0, perPage);
     } catch (error) {
       console.error('Unsplash search error:', error);
+      if (error instanceof APIError && this.accessKey) {
+        // If we have an API key but still got an error, log it
+        console.warn('Unsplash API failed, falling back to default images');
+      }
       return this.fallbackImages.slice(0, perPage);
     }
   }
@@ -69,13 +80,18 @@ export class UnsplashAPI {
         per_page: perPage.toString()
       });
 
-      const response = await fetch(`${this.baseUrl}/collections/${collectionId}/photos?${params}`, {
+      const response = await fetchWithRetry(`${this.baseUrl}/collections/${collectionId}/photos?${params}`, {
         headers: {
           'Authorization': `Client-ID ${this.accessKey}`
         }
       });
 
       const data: UnsplashPhoto[] = await response.json();
+      
+      if (!Array.isArray(data)) {
+        throw new APIError('Invalid response from Unsplash collections API');
+      }
+      
       return data.map(photo => photo.urls.regular);
     } catch (error) {
       console.error('Unsplash collection error:', error);
@@ -87,6 +103,30 @@ export class UnsplashAPI {
     const randomIndex = Math.floor(Math.random() * this.fallbackImages.length);
     return this.fallbackImages[randomIndex];
   }
+
+  // Get trending photos for homepage
+  async getTrendingPhotos(count = 6): Promise<string[]> {
+    if (!this.accessKey) {
+      return this.fallbackImages.slice(0, count);
+    }
 }
 
+    try {
+      const response = await fetchWithRetry(`${this.baseUrl}/photos?per_page=${count}&order_by=popular`, {
+        headers: {
+          'Authorization': `Client-ID ${this.accessKey}`
+      const data: UnsplashPhoto[] = await response.json();
+      
+      if (!Array.isArray(data)) {
+        throw new APIError('Invalid response from Unsplash trending API');
+      }
+      
+      return data.map(photo => photo.urls.regular);
+    } catch (error) {
+      console.error('Unsplash trending error:', error);
+      return this.fallbackImages.slice(0, count);
+    }
+  }
+        }
+      });
 export const unsplashAPI = new UnsplashAPI();

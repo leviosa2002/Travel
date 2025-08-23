@@ -6,11 +6,13 @@ import { MapPin, Compass, Calendar, Star, TrendingUp, Globe } from 'lucide-react
 import SearchBar from '@/components/SearchBar';
 import Map from '@/components/Map';
 import PlaceCard from '@/components/PlaceCard';
+import LoadingSpinner from '@/components/LoadingSpinner';
 import { wikipediaAPI } from '@/lib/wiki';
 import { Place } from '@/types/place';
 
 export default function Home() {
   const [isSearching, setIsSearching] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
   const router = useRouter();
 
   // Featured destinations data
@@ -121,7 +123,36 @@ export default function Home() {
     }
   };
 
-  const handlePlaceClick = (place: Place) => {
+  const handlePlaceClick = async (place: Place) => {
+    setIsLoading(true);
+    try {
+      const slug = place.title.toLowerCase().replace(/\s+/g, '-');
+      if (place.type === 'city') {
+        router.push(`/city/${slug}`);
+      } else if (place.type === 'monument') {
+        router.push(`/monument/${slug}`);
+      } else {
+        router.push(`/place/${slug}`);
+      }
+    } catch (error) {
+      console.error('Navigation error:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleAddToItinerary = async (place: Place) => {
+    try {
+      // Here you would integrate with your itinerary API
+      console.log('Adding to itinerary:', place.title);
+      // For now, just navigate to itinerary page
+      router.push('/itinerary');
+    } catch (error) {
+      console.error('Error adding to itinerary:', error);
+    }
+  };
+
+  const handleExploreClick = () => {
     const slug = place.title.toLowerCase().replace(/\s+/g, '-');
     if (place.type === 'city') {
       router.push(`/city/${slug}`);
@@ -131,6 +162,14 @@ export default function Home() {
       router.push(`/place/${slug}`);
     }
   };
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 flex items-center justify-center">
+        <LoadingSpinner size="lg" text="Loading destination..." />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50">
@@ -227,10 +266,7 @@ export default function Home() {
                 place={place}
                 onClick={() => handlePlaceClick(place)}
                 showAddToItinerary={true}
-                onAddToItinerary={() => {
-                  // Add to itinerary logic
-                  console.log('Add to itinerary:', place.title);
-                }}
+                onAddToItinerary={() => handleAddToItinerary(place)}
               />
             ))}
           </div>

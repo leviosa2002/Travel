@@ -3,7 +3,9 @@
 import { useEffect, useState } from 'react';
 import { WeatherData } from '@/types/weather';
 import { weatherAPI } from '@/lib/weather';
+import { APIError } from '@/lib/api';
 import { Cloud, Sun, CloudRain, Wind, Droplets, Eye, Gauge } from 'lucide-react';
+import LoadingSpinner from './LoadingSpinner';
 
 interface WeatherWidgetProps {
   lat: number;
@@ -14,13 +16,25 @@ interface WeatherWidgetProps {
 export default function WeatherWidget({ lat, lon, className = '' }: WeatherWidgetProps) {
   const [weather, setWeather] = useState<WeatherData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchWeather = async () => {
       setLoading(true);
-      const data = await weatherAPI.getCurrentWeather(lat, lon);
-      setWeather(data);
-      setLoading(false);
+      setError(null);
+      try {
+        const data = await weatherAPI.getCurrentWeather(lat, lon);
+        setWeather(data);
+      } catch (err) {
+        console.error('Weather fetch error:', err);
+        if (err instanceof APIError) {
+          setError(err.message);
+        } else {
+          setError('Failed to load weather data');
+        }
+      } finally {
+        setLoading(false);
+      }
     };
 
     fetchWeather();
@@ -29,20 +43,20 @@ export default function WeatherWidget({ lat, lon, className = '' }: WeatherWidge
   if (loading) {
     return (
       <div className={`bg-white rounded-xl p-6 shadow-lg animate-pulse ${className}`}>
-        <div className="h-6 bg-gray-200 rounded w-3/4 mb-4"></div>
-        <div className="h-20 bg-gray-200 rounded mb-4"></div>
-        <div className="space-y-2">
-          <div className="h-4 bg-gray-200 rounded w-1/2"></div>
-          <div className="h-4 bg-gray-200 rounded w-2/3"></div>
-        </div>
+        <LoadingSpinner text="Loading weather..." />
       </div>
     );
   }
 
-  if (!weather) {
+  if (error || !weather) {
     return (
       <div className={`bg-white rounded-xl p-6 shadow-lg ${className}`}>
-        <p className="text-gray-500">Weather data unavailable</p>
+        <div className="text-center">
+          <p className="text-gray-500 mb-2">Weather data unavailable</p>
+          {error && (
+            <p className="text-sm text-red-500">{error}</p>
+          )}
+        </div>
       </div>
     );
   }

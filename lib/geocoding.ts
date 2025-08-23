@@ -1,3 +1,5 @@
+import { APIError, fetchWithRetry, config } from './api';
+
 interface NominatimResult {
   place_id: number;
   licence: string;
@@ -17,12 +19,12 @@ interface NominatimResult {
 }
 
 export class GeocodingAPI {
-  private baseUrl = 'https://nominatim.openstreetmap.org';
+  private baseUrl = config.apis.nominatim;
   private delay = 1100; // Respect 1 request per second limit
 
-  private async makeRequest(url: string) {
+  private async makeRequest(url: string): Promise<Response> {
     await new Promise(resolve => setTimeout(resolve, this.delay));
-    return fetch(url, {
+    return fetchWithRetry(url, {
       headers: {
         'User-Agent': 'TravelCompanion/1.0'
       }
@@ -41,6 +43,10 @@ export class GeocodingAPI {
       const response = await this.makeRequest(`${this.baseUrl}/search?${params}`);
       const data: NominatimResult[] = await response.json();
       
+      if (!Array.isArray(data)) {
+        throw new APIError('Invalid response from geocoding service');
+      }
+      
       if (data.length === 0) return null;
 
       const result = data[0];
@@ -54,6 +60,9 @@ export class GeocodingAPI {
       };
     } catch (error) {
       console.error('Geocoding error:', error);
+      if (error instanceof APIError) {
+        throw error;
+      }
       return null;
     }
   }
@@ -70,6 +79,10 @@ export class GeocodingAPI {
       const response = await this.makeRequest(`${this.baseUrl}/reverse?${params}`);
       const data: NominatimResult = await response.json();
       
+      if (!data || typeof data !== 'object') {
+        throw new APIError('Invalid response from reverse geocoding service');
+      }
+      
       return {
         displayName: data.display_name,
         city: data.address.city,
@@ -79,6 +92,9 @@ export class GeocodingAPI {
       };
     } catch (error) {
       console.error('Reverse geocoding error:', error);
+      if (error instanceof APIError) {
+        throw error;
+      }
       return null;
     }
   }
@@ -96,6 +112,10 @@ export class GeocodingAPI {
       const response = await this.makeRequest(`${this.baseUrl}/search?${params}`);
       const data: NominatimResult[] = await response.json();
       
+      if (!Array.isArray(data)) {
+        throw new APIError('Invalid response from place search service');
+      }
+      
       return data.map(result => ({
         id: result.place_id.toString(),
         name: result.display_name.split(',')[0],
@@ -108,6 +128,9 @@ export class GeocodingAPI {
       }));
     } catch (error) {
       console.error('Place search error:', error);
+      if (error instanceof APIError) {
+        throw error;
+      }
       return [];
     }
   }

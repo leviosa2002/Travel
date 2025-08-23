@@ -1,7 +1,8 @@
+import { APIError, fetchWithRetry, config } from './api';
 import { WeatherData } from '@/types/weather';
 
 export class WeatherAPI {
-  private baseUrl = 'https://api.open-meteo.com/v1';
+  private baseUrl = config.apis.openMeteo;
 
   async getCurrentWeather(lat: number, lon: number): Promise<WeatherData | null> {
     try {
@@ -15,8 +16,12 @@ export class WeatherAPI {
         forecast_days: '7'
       });
 
-      const response = await fetch(`${this.baseUrl}/forecast?${params}`);
+      const response = await fetchWithRetry(`${this.baseUrl}/forecast?${params}`);
       const data = await response.json();
+
+      if (data.error) {
+        throw new APIError(`Weather API error: ${data.reason || 'Unknown error'}`);
+      }
 
       return {
         current: {
@@ -45,6 +50,9 @@ export class WeatherAPI {
       };
     } catch (error) {
       console.error('Weather API error:', error);
+      if (error instanceof APIError) {
+        throw error;
+      }
       return null;
     }
   }
@@ -87,6 +95,25 @@ export class WeatherAPI {
     if (code >= 95) return '⛈️';
     return '🌤️';
   }
+
+  async getWeatherAlerts(lat: number, lon: number) {
+    try {
+      const params = new URLSearchParams({
+        latitude: lat.toString(),
+        longitude: lon.toString(),
+        current: 'weather_code',
+        alerts: 'true',
+        timezone: 'auto'
+      });
 }
 
+      const response = await fetchWithRetry(`${this.baseUrl}/forecast?${params}`);
+      const data = await response.json();
+      
+      return data.alerts || [];
+    } catch (error) {
+      console.error('Weather alerts error:', error);
+      return [];
+    }
+  }
 export const weatherAPI = new WeatherAPI();

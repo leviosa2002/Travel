@@ -1,3 +1,5 @@
+import { APIError, fetchWithRetry, config } from './api';
+
 interface WikipediaSearchResult {
   query: {
     search: Array<{
@@ -32,7 +34,7 @@ interface WikipediaPageResult {
 
 export class WikipediaAPI {
   private baseUrl = 'https://en.wikipedia.org/api/rest_v1';
-  private apiUrl = 'https://en.wikipedia.org/w/api.php';
+  private apiUrl = config.apis.wikipedia;
 
   async searchPlaces(query: string, limit = 10) {
     try {
@@ -46,7 +48,7 @@ export class WikipediaAPI {
         srprop: 'extracts'
       });
 
-      const response = await fetch(`${this.apiUrl}?${params}`);
+      const response = await fetchWithRetry(`${this.apiUrl}?${params}`);
       const data: WikipediaSearchResult = await response.json();
       
       return data.query.search.map(item => ({
@@ -57,6 +59,9 @@ export class WikipediaAPI {
       }));
     } catch (error) {
       console.error('Wikipedia search error:', error);
+      if (error instanceof APIError) {
+        throw error;
+      }
       return [];
     }
   }
@@ -76,7 +81,7 @@ export class WikipediaAPI {
         colimit: '10'
       });
 
-      const response = await fetch(`${this.apiUrl}?${params}`);
+      const response = await fetchWithRetry(`${this.apiUrl}?${params}`);
       const data: WikipediaPageResult = await response.json();
       
       const pages = Object.values(data.query.pages);
@@ -94,13 +99,16 @@ export class WikipediaAPI {
       };
     } catch (error) {
       console.error('Wikipedia page details error:', error);
+      if (error instanceof APIError) {
+        throw error;
+      }
       return null;
     }
   }
 
   async getPlaceContent(title: string) {
     try {
-      const response = await fetch(
+      const response = await fetchWithRetry(
         `${this.baseUrl}/page/summary/${encodeURIComponent(title)}`
       );
       const data = await response.json();
@@ -114,6 +122,9 @@ export class WikipediaAPI {
       };
     } catch (error) {
       console.error('Wikipedia content error:', error);
+      if (error instanceof APIError) {
+        throw error;
+      }
       return null;
     }
   }
@@ -121,7 +132,7 @@ export class WikipediaAPI {
   async getFeaturedPlaces() {
     try {
       // Get featured articles from Wikipedia
-      const response = await fetch(
+      const response = await fetchWithRetry(
         `${this.baseUrl}/page/featured/2024/01/01`
       );
       const data = await response.json();
@@ -145,6 +156,31 @@ export class WikipediaAPI {
       ];
     }
   }
+
+  async getPlacesByCategory(category: string, limit = 10) {
+    try {
+      const params = new URLSearchParams({
+        action: 'query',
+        list: 'categorymembers',
+        cmtitle: `Category:${category}`,
+        format: 'json',
+        origin: '*',
+        cmlimit: limit.toString(),
+        cmtype: 'page'
+      });
 }
 
+      const response = await fetchWithRetry(`${this.apiUrl}?${params}`);
+      const data = await response.json();
+      
+      return data.query?.categorymembers?.map((item: any) => ({
+        id: item.pageid.toString(),
+        title: item.title,
+        pageId: item.pageid
+      })) || [];
+    } catch (error) {
+      console.error('Wikipedia category error:', error);
+      return [];
+    }
+  }
 export const wikipediaAPI = new WikipediaAPI();
